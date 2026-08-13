@@ -2,30 +2,7 @@ import torch
 
 
 
-def calculate_iou(target_bbox, anchors_bbox):
-    """
-    :param target_bbox: 真实标签的bbox [N,1,4]
-    :param anchors_bbox: 所有Anchors的bbox [1,M,4]
-    :return: iou [N,M]
-    """
 
-    targets_x, targets_y, targets_w, targets_h = target_bbox[:, :, 0], target_bbox[:, :, 1], target_bbox[:, :,
-                                                                                             2], target_bbox[:, :, 3]
-    anchors_x, anchors_y, anchors_w, anchors_h = anchors_bbox[:, :, 0], anchors_bbox[:, :, 1], anchors_bbox[:, :,
-                                                                                               2], anchors_bbox[:, :, 3]
-    left_up_x = torch.maximum(targets_x - targets_w / 2, anchors_x - anchors_w / 2)
-    left_up_y = torch.maximum(targets_y - targets_h / 2, anchors_y - anchors_h / 2)
-    right_down_x = torch.minimum(targets_x + targets_w / 2, anchors_x + anchors_w / 2)
-    right_down_y = torch.minimum(targets_y + targets_h / 2, anchors_y + anchors_h / 2)
-
-    # 计算交集
-    intersection = torch.maximum(right_down_x - left_up_x, torch.zeros_like(right_down_x)) * torch.maximum(
-        right_down_y - left_up_y, torch.zeros_like(right_down_y))
-    box_area = targets_w * targets_h
-    anchors_area = anchors_w * anchors_h
-    # 计算iou
-    iou = intersection / (box_area + anchors_area - intersection)  # [N, 9]
-    return iou
 
 
 def get_ignore(feature_shape, anchors, targets_denormalized, stride,num_anchors_perscale ,positive_mask,positive_threshold = 0.5):
@@ -174,11 +151,6 @@ def build_labels(image_size, targets, anchors,stride = [ 32, 16, 8]):
         except Exception as e:
             print(ymin)
             print(xmin)
-
-        # -----------------------------------#
-        # 计算忽略样本mask(1的位置代表要忽略的地方)
-        # -----------------------------------#
-        ignore_mask = get_ignore(feature_shape[i],anchors[num_anchors_perscale * i:num_anchors_perscale * (i+1)],targets_denormalized,stride[i],num_anchors_perscale,result[:, 5])
 
         # -------------------------#
         # 插入标签数据
