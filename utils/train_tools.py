@@ -232,12 +232,7 @@ def load_weights_by_shape(model, weight_file):
 
 
 
-if __name__ == '__main__':
-    lr_scheduler = CosineDecayLR(max_lr=0.1, min_lr=0.001, total_epochs=100)
-    for epoch in range(100):
-        lr = lr_scheduler(epoch,None)
-        print(lr)
-    GetGridCenter([13,13],3,32,"detect")
+
 
 
 
