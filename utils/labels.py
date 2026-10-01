@@ -2,37 +2,33 @@ import torch
 
 
 
+def calculate_iou(target_bbox, anchors_bbox):
+    """
+    :param target_bbox: 真实标签的bbox [N,1,4]
+    :param anchors_bbox: 所有Anchors的bbox [1,M,4]
+    :return: iou [N,M]
+    """
 
+    targets_x, targets_y, targets_w, targets_h = target_bbox[:, :, 0], target_bbox[:, :, 1], target_bbox[:, :,
+                                                                                             2], target_bbox[:, :, 3]
+    anchors_x, anchors_y, anchors_w, anchors_h = anchors_bbox[:, :, 0], anchors_bbox[:, :, 1], anchors_bbox[:, :,
+                                                                                               2], anchors_bbox[:, :, 3]
+    left_up_x = torch.maximum(targets_x - targets_w / 2, anchors_x - anchors_w / 2)
+    left_up_y = torch.maximum(targets_y - targets_h / 2, anchors_y - anchors_h / 2)
+    right_down_x = torch.minimum(targets_x + targets_w / 2, anchors_x + anchors_w / 2)
+    right_down_y = torch.minimum(targets_y + targets_h / 2, anchors_y + anchors_h / 2)
 
-
-def get_ignore(feature_shape, anchors, targets_denormalized, stride,num_anchors_perscale ,positive_mask,positive_threshold = 0.5):
-
-    # ---------------------------#
-    # 获取网格中心并映射到原图尺寸
-    # ---------------------------#
-    grid_x, grid_y = torch.meshgrid(torch.arange(feature_shape[0]), torch.arange(feature_shape[1]), indexing='xy')
-    grid_x = grid_x.flatten().repeat(num_anchors_perscale)  # 每个网格对应3个Anchor
-    grid_y = grid_y.flatten().repeat(num_anchors_perscale)
-    origin_center = torch.stack([(grid_x + 0.5) * stride, (grid_y + 0.5) * stride], dim=-1)
-
-    # ---------------------------#
-    # 拼接Anchors
-    # ---------------------------#
-    anchors = anchors.clone()
-    anchors = torch.cat([origin_center,anchors.repeat(feature_shape[0] * feature_shape[1], 1)], dim=-1)
-
-    # ---------------------------#
+    # 计算交集
+    intersection = torch.maximum(right_down_x - left_up_x, torch.zeros_like(right_down_x)) * torch.maximum(
+        right_down_y - left_up_y, torch.zeros_like(right_down_y))
+    box_area = targets_w * targets_h
+    anchors_area = anchors_w * anchors_h
     # 计算iou
-    # ---------------------------#
-    iou = calculate_iou(targets_denormalized[:,1:5].unsqueeze(1), anchors.unsqueeze(0))
+    iou = intersection / (box_area + anchors_area - intersection)  # [N, 9]
+    return iou
 
-    # ---------------------------#
-    # 筛选忽略样本
-    # ---------------------------#
-    ignore_mask = iou > positive_threshold
-    ignore_mask = torch.any(ignore_mask, dim=0)
 
-    return ignore_mask & ~(positive_mask.bool())
+
 
 
 def build_labels(image_size, targets, anchors,stride = [ 32, 16, 8]):
@@ -43,7 +39,7 @@ def build_labels(image_size, targets, anchors,stride = [ 32, 16, 8]):
     :param stride: 下采样步长，顺序[32,16,8]
     :return:  label : [class_id, cx_offset, cy_offset, w_log, h_log, 正负样本标记mask, 大小目标权重平衡] [10647,7]
              各维度说明：
-             - class_id: 目标类别ID（正样本有效，负样本/忽略样本为0）
+             - class_id: 目标类别ID（正样本有效）
              - cx_offset/cy_offset: 目标中心在特征图网格内的偏移（0~1）
              - w_log/h_log: 目标宽高/对应Anchor宽高的对数（正样本有效）
              - 正负样本标记mask: 1=正样本，0=负样本
@@ -151,6 +147,7 @@ def build_labels(image_size, targets, anchors,stride = [ 32, 16, 8]):
         except Exception as e:
             print(ymin)
             print(xmin)
+
 
         # -------------------------#
         # 插入标签数据
